@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Zone</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --secondary: #f5f6fa;
+            --text: #2c3e50;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--secondary);
+            color: var(--text);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- MENU CHÍNH --- */
+        .screen {
+            display: none; /* Mặc định ẩn tất cả */
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            animation: fadeIn 0.5s;
+        }
+
+        .screen.active {
+            display: flex; /* Chỉ hiện màn hình có class active */
+        }
+
+        h1 { margin-bottom: 30px; }
+
+        .btn-large {
+            padding: 15px 40px;
+            font-size: 20px;
+            margin: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: bold;
+        }
+
+        .btn-sudoku { background-color: var(--primary); color: white; }
+        .btn-caro { background-color: #e74c3c; color: white; }
+        
+        .btn-large:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .btn-back {
+            margin-top: 20px;
+            background: none;
+            border: 1px solid #999;
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        /* --- MÀN HÌNH CARO TROLL --- */
+        .troll-msg {
+            font-size: 28px;
+            color: #e74c3c;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        /* --- SUDOKU STYLES --- */
+        .sudoku-controls { margin-bottom: 15px; }
+        .btn-game {
+            padding: 8px 16px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        .btn-game.check { background-color: #27ae60; }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(9, 45px); /* Kích thước ô nhỏ hơn chút cho gọn */
+            grid-template-rows: repeat(9, 45px);
+            border: 2px solid #2c3e50;
+            background-color: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .tile {
+            width: 45px;
+            height: 45px;
+            border: 1px solid #dcdde1;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            outline: none;
+        }
+
+        /* Đường kẻ đậm chia khối 3x3 */
+        .tile:nth-child(3n) { border-right: 2px solid #2c3e50; }
+        .tile:nth-child(9n) { border-right: none; }
+        .tile-bottom-bold { border-bottom: 2px solid #2c3e50; }
+
+        .tile-start { background-color: #ecf0f1; color: #2c3e50; pointer-events: none; }
+        .tile-correct { background-color: #d5f5e3; color: #196f3d; }
+        .tile-wrong { background-color: #fadbd8; color: #922b21; }
+        .tile:focus { background-color: #d6eaf8; }
+
+        /* Ẩn input number arrows */
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div id="screen-menu" class="screen active">
+        <h1>Bạn muốn chơi gì hôm nay?</h1>
+        <div>
+            <button class="btn-large btn-sudoku" onclick="showScreen('sudoku')">Sudoku 🧠</button>
+            <button class="btn-large btn-caro" onclick="showScreen('caro')">Caro ❌⭕</button>
+        </div>
+    </div>
+
+    <div id="screen-caro" class="screen">
+        <div class="troll-msg">Too easy. Why not Sudoku? 😏</div>
+        <p>Trò này dành cho trẻ con thôi, quay lại chơi game trí tuệ đi.</p>
+        <button class="btn-large btn-sudoku" onclick="showScreen('sudoku')">Chơi Sudoku ngay</button>
+        <br>
+        <button class="btn-back" onclick="showScreen('menu')">Về Menu</button>
+    </div>
+
+    <div id="screen-sudoku" class="screen">
+        <h2>Sudoku Challenge</h2>
+        <div class="sudoku-controls">
+            <button class="btn-game" onclick="newGame()">Ván Mới</button>
+            <button class="btn-game check" onclick="checkSolution()">Kiểm Tra</button>
+            <button class="btn-game" onclick="showScreen('menu')" style="background-color: #7f8c8d;">Thoát</button>
+        </div>
+        <div id="board"></div>
+        <p id="message" style="height: 20px; font-weight: bold;"></p>
+    </div>
+
+    <script>
+        // --- CHUYỂN MÀN HÌNH ---
+        function showScreen(screenName) {
+            // Ẩn tất cả màn hình
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            
+            // Hiện màn hình được chọn
+            document.getElementById('screen-' + screenName).classList.add('active');
+
+            // Nếu vào màn hình Sudoku thì tạo game mới nếu chưa có
+            if (screenName === 'sudoku' && !gameInitialized) {
+                newGame();
+                gameInitialized = true;
+            }
+        }
+
+        // --- LOGIC SUDOKU ---
+        const boardElement = document.getElementById("board");
+        const messageElement = document.getElementById("message");
+        let solution = [];
+        let currentBoard = [];
+        let gameInitialized = false;
+
+        function initBoardUI() {
+            boardElement.innerHTML = "";
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    let tile = document.createElement("input");
+                    tile.id = r + "-" + c;
+                    tile.type = "text"; 
+                    tile.maxLength = 1;
+                    tile.classList.add("tile");
+                    if (r == 2 || r == 5) tile.classList.add("tile-bottom-bold");
+
+                    tile.addEventListener("input", function() {
+                        this.value = this.value.replace(/[^1-9]/g, '');
+                        this.classList.remove("tile-wrong", "tile-correct");
+                    });
+                    boardElement.appendChild(tile);
+                }
+            }
+        }
+
+        function isValid(board, row, col, num) {
+            for (let i = 0; i < 9; i++) {
+                if (board[row][i] == num || board[i][col] == num) return false;
+                let boxRow = 3 * Math.floor(row / 3) + Math.floor(i / 3);
+                let boxCol = 3 * Math.floor(col / 3) + i % 3;
+                if (board[boxRow][boxCol] == num) return false;
+            }
+            return true;
+        }
+
+        function solveSudokuHelper(board) {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (board[r][c] == 0) {
+                        let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5);
+                        for (let num of nums) {
+                            if (isValid(board, r, c, num)) {
+                                board[r][c] = num;
+                                if (solveSudokuHelper(board)) return true;
+                                board[r][c] = 0;
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function newGame() {
+            initBoardUI();
+            let board = Array.from({ length: 9 }, () => Array(9).fill(0));
+            solveSudokuHelper(board);
+            solution = JSON.parse(JSON.stringify(board));
+
+            // Xóa bớt số (Độ khó: xóa 40 ô)
+            let attempts = 40; 
+            while (attempts > 0) {
+                let r = Math.floor(Math.random() * 9);
+                let c = Math.floor(Math.random() * 9);
+                if (board[r][c] != 0) {
+                    board[r][c] = 0;
+                    attempts--;
+                }
+            }
+            currentBoard = board;
+            messageElement.innerText = "";
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    let tile = document.getElementById(r + "-" + c);
+                    if (currentBoard[r][c] != 0) {
+                        tile.value = currentBoard[r][c];
+                        tile.classList.add("tile-start");
+                    }
+                }
+            }
+        }
+
+        function checkSolution() {
+            let isCorrect = true;
+            let isFull = true;
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    let tile = document.getElementById(r + "-" + c);
+                    let val = parseInt(tile.value);
+                    if (!val) { isFull = false; continue; }
+                    
+                    if (val === solution[r][c]) {
+                        if (!tile.classList.contains("tile-start")) tile.classList.add("tile-correct");
+                    } else {
+                        tile.classList.add("tile-wrong");
+                        isCorrect = false;
+                    }
+                }
+            }
+            if (isFull && isCorrect) {
+                messageElement.innerText = "Tuyệt vời! Bạn đã thắng!";
+                messageElement.style.color = "green";
+            } else if (!isCorrect) {
+                messageElement.innerText = "Có lỗi sai, hãy kiểm tra lại!";
+                messageElement.style.color = "red";
+            }
+        }
+    </script>
+</body>
+</html>
