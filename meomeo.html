@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trò Chơi Sudoku Đơn Giản</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+
+        h1 { color: #333; margin-bottom: 10px; }
+
+        .controls { margin-bottom: 20px; }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 0 5px;
+            transition: background 0.3s;
+        }
+
+        button:hover { background-color: #0056b3; }
+        button#btn-check { background-color: #28a745; }
+        button#btn-check:hover { background-color: #1e7e34; }
+
+        /* Bảng Sudoku */
+        #board {
+            display: grid;
+            grid-template-columns: repeat(9, 50px);
+            grid-template-rows: repeat(9, 50px);
+            border: 2px solid #333;
+            background-color: white;
+        }
+
+        .tile {
+            width: 50px;
+            height: 50px;
+            border: 1px solid #bfc9d9;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            cursor: pointer;
+            outline: none; /* Bỏ viền xanh mặc định khi click */
+        }
+
+        /* Tạo đường viền đậm cho các khối 3x3 */
+        .tile:nth-child(3n) { border-right: 2px solid #333; }
+        .tile:nth-child(9n) { border-right: none; } /* Bỏ viền phải ở cột cuối cùng */
+        
+        /* Đường viền dưới đậm cho hàng 3 và 6 */
+        .tile-bottom-bold { border-bottom: 2px solid #333; }
+
+        /* Màu sắc trạng thái */
+        .tile-start {
+            background-color: #e8e8e8;
+            color: #333;
+            pointer-events: none; /* Không cho sửa ô đề bài */
+        }
+
+        .tile-correct { background-color: #d4edda; color: #155724; }
+        .tile-wrong { background-color: #f8d7da; color: #721c24; }
+        .tile-selected { background-color: #cce5ff; }
+
+        /* Ẩn input mặc định */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Sudoku</h1>
+    <div class="controls">
+        <button onclick="newGame()">Ván Mới</button>
+        <button id="btn-check" onclick="checkSolution()">Kiểm Tra</button>
+    </div>
+    <div id="board"></div>
+    <p id="message" style="height: 20px; color: #d9534f; font-weight: bold;"></p>
+
+    <script>
+        const boardElement = document.getElementById("board");
+        const messageElement = document.getElementById("message");
+        let solution = [];
+        let currentBoard = [];
+
+        // Khởi tạo bảng rỗng
+        function initBoard() {
+            boardElement.innerHTML = "";
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    let tile = document.createElement("input");
+                    tile.id = r + "-" + c;
+                    tile.type = "text"; // Dùng text để kiểm soát tốt hơn
+                    tile.maxLength = 1;
+                    tile.classList.add("tile");
+                    
+                    // Thêm viền đậm cho hàng 3 và 6
+                    if (r == 2 || r == 5) {
+                        tile.classList.add("tile-bottom-bold");
+                    }
+
+                    // Sự kiện nhập liệu (chỉ cho nhập số 1-9)
+                    tile.addEventListener("input", function() {
+                        this.value = this.value.replace(/[^1-9]/g, '');
+                        // Xóa trạng thái đúng/sai khi người dùng sửa lại
+                        this.classList.remove("tile-wrong", "tile-correct");
+                    });
+
+                    // Sự kiện focus để highlight
+                    tile.addEventListener("focus", function() {
+                        resetSelection();
+                        this.classList.add("tile-selected");
+                    });
+
+                    boardElement.appendChild(tile);
+                }
+            }
+        }
+
+        function resetSelection() {
+            const tiles = document.querySelectorAll(".tile");
+            tiles.forEach(t => t.classList.remove("tile-selected"));
+        }
+
+        // --- Logic tạo đề Sudoku ---
+
+        function isValid(board, row, col, num) {
+            for (let i = 0; i < 9; i++) {
+                // Kiểm tra hàng và cột
+                if (board[row][i] == num || board[i][col] == num) return false;
+                
+                // Kiểm tra ô vuông 3x3
+                let boxRow = 3 * Math.floor(row / 3) + Math.floor(i / 3);
+                let boxCol = 3 * Math.floor(col / 3) + i % 3;
+                if (board[boxRow][boxCol] == num) return false;
+            }
+            return true;
+        }
+
+        function solveSudoku(board) {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (board[r][c] == 0) {
+                        let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+                        nums.sort(() => Math.random() - 0.5); // Xáo trộn để tạo ngẫu nhiên
+
+                        for (let num of nums) {
+                            if (isValid(board, r, c, num)) {
+                                board[r][c] = num;
+                                if (solveSudoku(board)) return true;
+                                board[r][c] = 0;
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function generateBoard() {
+            // 1. Tạo bảng rỗng
+            let board = Array.from({ length: 9 }, () => Array(9).fill(0));
+            
+            // 2. Điền đầy đủ bảng (tạo đáp án)
+            solveSudoku(board);
+            solution = JSON.parse(JSON.stringify(board)); // Lưu đáp án
+
+            // 3. Xóa bớt số để tạo đề bài (Xóa khoảng 40-50 ô)
+            let attempts = 45; 
+            while (attempts > 0) {
+                let r = Math.floor(Math.random() * 9);
+                let c = Math.floor(Math.random() * 9);
+                if (board[r][c] != 0) {
+                    board[r][c] = 0;
+                    attempts--;
+                }
+            }
+            return board;
+        }
+
+        // --- Chức năng Game ---
+
+        function newGame() {
+            initBoard();
+            currentBoard = generateBoard();
+            messageElement.innerText = "";
+            
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    let tile = document.getElementById(r + "-" + c);
+                    if (currentBoard[r][c] != 0) {
+                        tile.value = currentBoard[r][c];
+                        tile.classList.add("tile-start");
+                    } else {
+                        tile.value = "";
+                        tile.classList.remove("tile-start");
+                    }
+                    tile.classList.remove("tile-correct", "tile-wrong");
+                }
+            }
+        }
+
+        function checkSolution() {
+            let isFull = true;
+            let isCorrect = true;
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    let tile = document.getElementById(r + "-" + c);
+                    let val = parseInt(tile.value);
+                    
+                    if (!val) {
+                        isFull = false;
+                        continue;
+                    }
+
+                    if (val === solution[r][c]) {
+                        if (!tile.classList.contains("tile-start")) {
+                            tile.classList.add("tile-correct");
+                            tile.classList.remove("tile-wrong");
+                        }
+                    } else {
+                        tile.classList.add("tile-wrong");
+                        tile.classList.remove("tile-correct");
+                        isCorrect = false;
+                    }
+                }
+            }
+
+            if (isFull && isCorrect) {
+                messageElement.innerText = "Chúc mừng! Bạn đã giải thành công!";
+                messageElement.style.color = "green";
+            } else if (!isCorrect) {
+                messageElement.innerText = "Có lỗi sai, hãy kiểm tra các ô màu đỏ.";
+                messageElement.style.color = "red";
+            } else {
+                messageElement.innerText = "Hãy điền hết các ô trống.";
+                messageElement.style.color = "orange";
+            }
+        }
+
+        // Bắt đầu game khi tải trang
+        newGame();
+
+    </script>
+</body>
+</html>
